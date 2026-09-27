@@ -1,0 +1,17 @@
+# C / Daemon build artifacts
+daemon/*.o
+daemon/rhythm-daemon
+
+# Android / Gradle artifacts
+.gradle/
+build/
+android/.gradle/
+android/build/
+android/app/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Keep prebuilt APK for one-click setup
+!rhythm-controller.apk
