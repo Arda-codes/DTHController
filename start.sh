@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ⚡ Rhythm Controller - Quick Play Launcher
+# ⚡ DTHController (Digital Twin : Harmonix) - Quick Play Launcher
 # Automatically checks ADB reverse and starts the Linux companion daemon.
 # ==============================================================================
 
@@ -16,7 +16,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo -e "${CYAN}${BOLD}⚡ Starting Rhythm Controller Companion...${NC}"
+echo -e "${CYAN}${BOLD}⚡ Starting DTHController Companion (Digital Twin : Harmonix)...${NC}"
 
 # Check ADB
 if command -v adb >/dev/null 2>&1; then

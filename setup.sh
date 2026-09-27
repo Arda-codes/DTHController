@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ⚡ Rhythm Controller - Automated Installation & Setup Script
+# ⚡ DTHController (Digital Twin : Harmonix) - Automated Setup Script
 # Works on Arch/CachyOS, Ubuntu/Debian, Fedora, openSUSE, etc.
 # ==============================================================================
 
@@ -18,7 +18,7 @@ cd "$SCRIPT_DIR"
 
 echo -e "${CYAN}${BOLD}"
 echo "╔═══════════════════════════════════════════════════════════════════╗"
-echo "║             ⚡ RHYTHM CONTROLLER - AUTOMATED SETUP ⚡            ║"
+echo "║          ⚡ DTHCONTROLLER (DIGITAL TWIN : HARMONIX) ⚡           ║"
 echo "║      Ultra-Low-Latency Android Tablet Controller for Linux        ║"
 echo "╚═══════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"

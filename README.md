@@ -1,11 +1,11 @@
-# ⚡ Rhythm Controller (Android + Linux Companion)
+# ⚡ DTHController (Digital Twin : Harmonix)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux%20(X11%20%2F%20Wayland)-orange.svg)](https://kernel.org)
 [![Android: 8.0+](https://img.shields.io/badge/Android-8.0%2B-green.svg)](https://developer.android.com)
 [![Latency: Sub--Millisecond](https://img.shields.io/badge/Latency-Sub--Millisecond-brightgreen.svg)]()
 
-An ultra-low-latency, zero-overhead rhythm game controller system that turns an **Android tablet** (via USB) into a high-precision input device for **Linux**. Ideal for games like **osu!mania**, **Clone Hero**, **Etterna**, **Project Sekai / Sonolus**, **Project Diva**, and **SDVX / K-Shoot MANIA**.
+**DTHController (Digital Twin : Harmonix)** is an ultra-low-latency, zero-overhead rhythm game controller system that turns an **Android tablet** (via USB) into a high-precision input device for **Linux**. Ideal for games like **osu!mania**, **Clone Hero**, **Etterna**, **Project Sekai / Sonolus**, **Project Diva**, and **SDVX / K-Shoot MANIA**.
 
 ---
 
@@ -100,8 +100,8 @@ An ultra-low-latency, zero-overhead rhythm game controller system that turns an 
 Clone this repository and run the automated setup script:
 
 ```bash
-git clone https://github.com/Arda-codes/rhythm-controller.git
-cd rhythm-controller
+git clone https://github.com/Arda-codes/DTHController.git
+cd DTHController
 ./setup.sh
 ```
 

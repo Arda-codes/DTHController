@@ -162,7 +162,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* Print diagnostics: Active key mapping */
-    printf("\n=== Rhythm Game Controller Key Mapping ===\n");
+    printf("\n=== DTHController (Digital Twin : Harmonix) ===\n");
     printf("Row 0 (Up):     [0]=%s [1]=%s [2]=%s [3]=%s\n",
            keyname_from_code(km.keycodes[0]), keyname_from_code(km.keycodes[1]),
            keyname_from_code(km.keycodes[2]), keyname_from_code(km.keycodes[3]));
@@ -172,15 +172,15 @@ int main(int argc, char *argv[]) {
     printf("Row 2 (Down):   [8]=%s [9]=%s [10]=%s [11]=%s\n",
            keyname_from_code(km.keycodes[8]), keyname_from_code(km.keycodes[9]),
            keyname_from_code(km.keycodes[10]), keyname_from_code(km.keycodes[11]));
-    printf("==========================================\n\n");
+    printf("===============================================\n\n");
 
     /* Create virtual uinput device */
     uinput_ctx_t uinput_ctx;
-    if (uinput_device_create(&uinput_ctx, &km, "Rhythm Game Controller") < 0) {
+    if (uinput_device_create(&uinput_ctx, &km, "DTHController") < 0) {
         fprintf(stderr, "[daemon] Fatal: Could not create uinput device.\n");
         return 1;
     }
-    printf("[uinput] Virtual controller device created successfully.\n");
+    printf("[uinput] Virtual DTHController device created successfully.\n");
 
     /* Create and bind server socket */
     int server_fd = setup_server_socket(port);
