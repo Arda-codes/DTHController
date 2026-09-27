@@ -1,103 +1,101 @@
-# ⚡ DTHController (Digital Twin : Harmonix)
+# DTHController (Digital Twin : Harmonix)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux%20(X11%20%2F%20Wayland)-orange.svg)](https://kernel.org)
 [![Android: 8.0+](https://img.shields.io/badge/Android-8.0%2B-green.svg)](https://developer.android.com)
-[![Latency: Sub--Millisecond](https://img.shields.io/badge/Latency-Sub--Millisecond-brightgreen.svg)]()
 
-**DTHController (Digital Twin : Harmonix)** is an ultra-low-latency, zero-overhead rhythm game controller system that turns an **Android tablet** (via USB) into a high-precision input device for **Linux**. Ideal for games like **osu!mania**, **Clone Hero**, **Etterna**, **Project Sekai / Sonolus**, **Project Diva**, and **SDVX / K-Shoot MANIA**.
-
----
-
-## 📑 Table of Contents
-- [Architecture & Data Flow](#-architecture--data-flow)
-- [Key Features](#-key-features)
-- [Ultra-Low-Latency Engineering](#-ultra-low-latency-engineering)
-- [Quick Start (Automated Setup)](#-quick-start-automated-setup)
-- [Manual Setup & Compilation](#-manual-setup--compilation)
-- [In-App Settings & Customization](#-in-app-settings--customization)
-- [Wire Protocol Specification](#-wire-protocol-specification)
-- [Tablet Latency Optimization Guide](#-tablet-latency-optimization-guide)
-- [Troubleshooting & FAQ](#-troubleshooting--faq)
-- [License](#-license)
+DTHController turns an Android tablet into a low-latency Linux game controller over USB. It provides a 12-pad touch interface on Android and a native C companion daemon that exposes a `/dev/uinput` keyboard device on Linux, suitable for rhythm games such as osu!mania, Clone Hero, and Etterna.
 
 ---
 
-## 🏛️ Architecture & Data Flow
+## Table of Contents
+- [Architecture](#architecture)
+- [Features](#features)
+- [Latency Optimizations](#latency-optimizations)
+- [Quick Start](#quick-start)
+- [Manual Setup](#manual-setup)
+- [In-App Settings](#in-app-settings)
+- [Wire Protocol](#wire-protocol)
+- [Tablet Configuration](#tablet-configuration)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+---
+
+## Architecture
 
 ```
    ┌─────────────────────────────────────────────────────────┐
    │                  Android Tablet (USB)                   │
    │                                                         │
-   │   [ Multi-Touch Grid (3x4 Layout) ]                     │
+   │   Multi-touch grid (3x4 layout)                         │
    │               │                                         │
    │               │ requestUnbufferedDispatch()             │
-   │               ▼ (Bypasses Choreographer VSYNC Batching) │
-   │   [ Direct onTouchEvent Hot Path ]                      │
-   │               │                                         │
-   │               │ Direct Socket Write (0 Thread Switches) │
    │               ▼                                         │
-   │   [ 2-byte Binary Packet: Button ID (0-11) + State ]    │
+   │   Direct onTouchEvent handler                           │
+   │               │                                         │
+   │               │ Direct socket write (< 5 µs)            │
+   │               ▼                                         │
+   │   2-byte binary packet: [button_id, state]              │
    └───────────────────────────┬─────────────────────────────┘
                                │
-               USB Cable via ADB Reverse Tunnel
+               USB cable via adb reverse tunnel
                `adb reverse tcp:54321 tcp:54321` (< 0.5 ms RTT)
                                │
    ┌───────────────────────────▼─────────────────────────────┐
    │                       Linux Host                        │
    │                                                         │
-   │   [ Native C rhythm-daemon (SCHED_RR Priority) ]        │
-   │               │ TCP_NODELAY, TCP_QUICKACK, 2KB Buffer   │
-   │               │ Zero-desync packet parser               │
+   │   C companion daemon (SCHED_RR real-time priority)      │
+   │               │ TCP_NODELAY, TCP_QUICKACK, 2KB buffer   │
+   │               │ Desync-safe packet parser               │
    │               ▼                                         │
-   │   [ Atomic write(2): EV_KEY + SYN_REPORT ]              │
+   │   Atomic write(2): [EV_KEY, SYN_REPORT]                 │
    │               ▼                                         │
-   │   [ /dev/uinput Virtual Keyboard Device ]               │
-   │       ├── ID_INPUT_KEYBOARD=1 (Native Wayland / KWin)   │
-   │       └── EV_REP Disabled (Zero auto-repeat chatter)    │
+   │   /dev/uinput virtual keyboard device                   │
+   │       ├── ID_INPUT_KEYBOARD=1 (Wayland & X11 routed)    │
+   │       └── EV_REP disabled (no autorepeat chatter)       │
    │               ▼                                         │
-   │   [ Rhythm Game (osu!mania, Clone Hero, Etterna, etc.) ]│
+   │   Game (osu!mania, Clone Hero, Etterna, etc.)           │
    └─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## ✨ Key Features
+## Features
 
-- **🎮 3x4 (12-Pad) Multi-Touch Grid:** 12 large, responsive pads arranged in 3 rows:
-  - **Row 0 (Up):** Arrow chevron iconography (`▲`)
-  - **Row 1 (Middle):** Target diamond iconography (`◆`)
-  - **Row 2 (Down):** Downward chevron iconography (`▼`)
-- **⚡ Sub-Millisecond Input Latency:** Zero thread switches, unbuffered hardware interrupts, and minimal kernel buffers.
-- **🛡️ Zero Autorepeat & Chatter Suppression:** Custom kernel device disables `EV_REP` so held notes never trigger rapid keyboard repeat spam (`qqqqqqqq`).
-- **🪟 Full Wayland & X11 Compatibility:** Registers the complete standard key range (1..248) so `systemd-udev` classifies it as `ID_INPUT_KEYBOARD=1`, routing inputs directly to active game windows.
-- **📐 Interactive Layout Scaling:** Scale width & height from 50% to 100%, customize pad margins (4px to 24px), and choose vertical alignments (Top, Center, Bottom).
-- **🎛️ Live In-App Key Rebinding:** Rebind any pad to any keyboard or gamepad key directly on the tablet screen with instant dynamic synchronization to Linux.
-- **🔊 Low-Latency Hitsounds:** Toggleable mechanical switch, soft thock, or arcade pop sound with volume control and clipping headroom.
-- **📳 Decoupled Haptic Feedback:** Vibrator engine runs asynchronously on background executors to prevent stalling touch interrupts.
-
----
-
-## 🔬 Ultra-Low-Latency Engineering
-
-1. **Bypassing Android Choreographer VSYNC:**
-   Standard Android views batch touch events and delay delivery until the next display frame (11–16 ms delay at 60Hz). `GridTouchView` enables `requestUnbufferedDispatch(SOURCE_TOUCHSCREEN)`, feeding hardware digitizer interrupts straight to `onTouchEvent()` in real time.
-2. **Zero-Context-Switch Direct Socket Path (< 5 µs):**
-   Instead of queuing touch events through coroutines or background workers (which cost 2–10 ms in thread scheduling), `NetworkClient.sendEvent()` directly transmits bytes to the TCP output stream on line #1 of `onTouchEvent()`.
-3. **Optimized Socket Options:**
-   - `TCP_NODELAY`: Disables Nagle's algorithm post-handshake, preventing 40ms delayed transmission.
-   - `TCP_QUICKACK`: Tells the Linux kernel to acknowledge incoming packets immediately.
-   - `SO_RCVBUF / SO_SNDBUF`: Shrunk to minimal buffers (512B - 2KB) to eliminate bufferbloat.
-4. **Linux Real-Time Scheduling (`SCHED_RR`):**
-   The companion daemon elevates itself to real-time round-robin scheduling (`SCHED_RR`, priority 10), preempting non-real-time desktop processes.
-5. **Zero Garbage Collection on Hot Path:**
-   No objects, arrays, or iterators are allocated during touch events or drawing routines.
+- **12 touch pads (3x4):** Arranged in three rows with direction indicators:
+  - Row 0 (Up): Chevron icons (`▲`)
+  - Row 1 (Middle): Diamond icons (`◆`)
+  - Row 2 (Down): Downward chevron icons (`▼`)
+- **No autorepeat spam:** The uinput device runs without `EV_REP`, preventing the kernel from repeating held keys during hold notes.
+- **Wayland and X11 support:** Registers keys 1 to 248 so systemd-udev classifies the device with `ID_INPUT_KEYBOARD=1`, routing keystrokes directly to focused windows.
+- **Adjustable pad scaling:** Scale pad width and height from 50% to 100%, customize pad margins (4px to 24px), and align pads to the top, center, or bottom of the screen.
+- **Key rebinding:** Rebind any pad to any keyboard or gamepad key directly from the tablet interface. Changes synchronize immediately with the daemon.
+- **Hitsound feedback:** Optional mechanical switch, soft thock, or arcade pop sound with volume control and headroom limits to prevent clipping.
+- **Decoupled haptics:** Tactile vibration runs on a background executor so vibration calls never delay touch packet transmission.
 
 ---
 
-## 🚀 Quick Start (Automated Setup)
+## Latency Optimizations
 
-Clone this repository and run the automated setup script:
+1. **Unbuffered touch dispatch:**
+   Android usually delays touch events until display VSYNC (11 to 16 ms at 60 Hz). DTHController calls `requestUnbufferedDispatch(SOURCE_TOUCHSCREEN)` so hardware interrupts reach `onTouchEvent()` immediately.
+2. **Direct socket writes (< 5 µs):**
+   Instead of queuing events into background coroutines or handlers, `NetworkClient.sendEvent()` writes directly to the TCP socket stream inside `onTouchEvent()`.
+3. **Socket options:**
+   - `TCP_NODELAY`: Disables Nagle's algorithm after connection, eliminating 40 ms packet delays.
+   - `TCP_QUICKACK`: Forces immediate TCP acknowledgments on Linux.
+   - `SO_RCVBUF` and `SO_SNDBUF`: Set to minimal buffers (512 B to 2 KB) to prevent queue buffering.
+4. **Real-time Linux priority:**
+   The daemon runs with `SCHED_RR` (priority 10) to preempt background desktop processes.
+5. **Zero allocations on the hot path:**
+   No objects, arrays, or iterators are allocated during touch handling or canvas drawing.
+
+---
+
+## Quick Start
+
+Clone the repository and run the setup script:
 
 ```bash
 git clone https://github.com/Arda-codes/DTHController.git
@@ -105,34 +103,31 @@ cd DTHController
 ./setup.sh
 ```
 
-### What `./setup.sh` does automatically:
-1. Detects your distribution and installs any missing packages (`gcc`, `make`, `android-tools`).
-2. Configures `/etc/udev/rules.d/99-uinput.rules` for non-root `/dev/uinput` access.
-3. Adds your user to the `input` group and ensures the `uinput` kernel module is loaded on boot.
-4. Compiles the native Linux daemon with `-O3` optimizations.
-5. Checks your USB-connected Android tablet and flashes `rhythm-controller.apk` directly via ADB.
+`setup.sh` performs the following steps:
+1. Installs missing dependencies (`gcc`, `make`, `adb`) via your distribution package manager.
+2. Creates `/etc/udev/rules.d/99-uinput.rules` for non-root uinput access and loads the kernel module.
+3. Compiles the Linux daemon with `-O3` optimizations.
+4. Checks for a connected Android tablet and installs `rhythm-controller.apk`.
 
-### 🎮 Playing:
-Whenever you want to play, connect your tablet and run:
-
+To launch the controller:
 ```bash
 ./start.sh
 ```
-`./start.sh` automatically ensures `adb reverse` is active and launches the daemon!
+`start.sh` sets up port forwarding (`adb reverse tcp:54321 tcp:54321`) and starts `rhythm-daemon`.
 
 ---
 
-## 🛠️ Manual Setup & Compilation
+## Manual Setup
 
-### 1. Build the Linux Daemon
-Ensure you have `gcc` and `make` installed:
+### 1. Compile the Linux Daemon
+Requires `gcc` and `make`:
 ```bash
 cd daemon
 make clean && make
 ```
 
-### 2. Configure `/dev/uinput` Permissions (Non-root)
-To run the daemon without `sudo`:
+### 2. Configure /dev/uinput Permissions
+To run without `sudo`:
 ```bash
 echo 'KERNEL=="uinput", MODE="0660", GROUP="input", TAG+="uaccess"' | sudo tee /etc/udev/rules.d/99-uinput.rules
 sudo udevadm control --reload-rules && sudo udevadm trigger
@@ -140,58 +135,62 @@ sudo usermod -aG input $USER
 sudo modprobe uinput
 ```
 
-### 3. Connect Tablet & Forward Port
-Enable **USB Debugging** on your Android tablet:
+### 3. Connect Tablet and Forward Port
+Enable USB debugging on the tablet, connect the cable, and run:
 ```bash
 adb reverse tcp:54321 tcp:54321
 ```
 
-### 4. Build the Android APK (Optional)
-If you wish to modify and build the APK yourself:
+### 4. Install the Android App
+Install the included APK:
+```bash
+adb install -r rhythm-controller.apk
+```
+
+Or build from source:
 ```bash
 cd android
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
-*(A pre-compiled APK is already included in the root as [`rhythm-controller.apk`](rhythm-controller.apk)).*
 
 ---
 
-## ⚙️ In-App Settings & Customization
+## In-App Settings
 
-Tap the **Gear Icon (`⚙️`)** in the top-left corner of the tablet screen:
+Tap the gear icon in the top-left corner of the tablet screen:
 
 | Setting | Options / Description |
 | :--- | :--- |
-| **Change Key Bindings** | Tap any button to rebind it to any key (Q-Z, 0-9, Space, Enter, Shift, Gamepad buttons). |
-| **Button Width Scaling** | Scale grid width from 50% to 100% to fit your hand posture. |
-| **Button Height Scaling**| Scale grid height from 50% to 100%. |
-| **Button Spacing / Gap** | Tiny (4px), Normal (10px), Wide (16px), Extra Wide (24px). |
+| **Change Key Bindings** | Rebind any pad to any key (alphanumeric, arrows, modifiers, gamepad buttons). |
+| **Button Width Scaling** | 50% to 100% horizontal width scale. |
+| **Button Height Scaling**| 50% to 100% vertical height scale. |
+| **Button Spacing / Gap** | Tiny (4px), Normal (10px), Wide (16px), or Extra Wide (24px). |
 | **Vertical Alignment**   | Top, Center, or Bottom. |
-| **Click Sound**          | Toggle instant hitsound on press. |
-| **Sound Tone**           | **Mechanical Switch**, **Soft Thock**, or **Arcade Pop**. |
-| **Sound Volume**         | 100%, 85%, 70%, 50%, 30%, 15%, 0% (Mute). |
-| **Haptic Vibration**     | Toggle hardware tactile click vibration. |
-| **Presets**              | Instant switch between **Default (QWER / ASDF / ZXCV)** and **4-Key (DFJK / Space)**. |
+| **Click Sound**          | On or Off. |
+| **Sound Tone**           | Mechanical Switch, Soft Thock, or Arcade Pop. |
+| **Sound Volume**         | 100%, 85%, 70%, 50%, 30%, 15%, or 0% (Mute). |
+| **Haptic Vibration**     | On or Off. |
+| **Presets**              | Default (QWER / ASDF / ZXCV) or 4-Key (DFJK / Space). |
 
 ---
 
-## 📡 Wire Protocol Specification
+## Wire Protocol
 
-Communication between the tablet and the host daemon is carried over a raw TCP socket on `127.0.0.1:54321`.
+The tablet streams events to `127.0.0.1:54321` over a raw TCP connection.
 
-### 1. Button Press / Release Event (2 Bytes)
+### Button Events (2 Bytes)
 ```
-[ Button ID (1 byte: 0..11) ] [ State (1 byte: 1=Down, 0=Up) ]
-```
-
-### 2. Dynamic Remap Packet (4 Bytes)
-Sent whenever the user rebinds a key in settings:
-```
-[ 0xFE (1 byte) ] [ Button ID (1 byte) ] [ Keycode High (1 byte) ] [ Keycode Low (1 byte) ]
+[ button_id: uint8 (0..11) ] [ state: uint8 (1=down, 0=up) ]
 ```
 
-### 3. Default Button Layout
+### Dynamic Remapping (4 Bytes)
+Sent when a binding changes in settings:
+```
+[ 0xFE: uint8 ] [ button_id: uint8 ] [ keycode_hi: uint8 ] [ keycode_lo: uint8 ]
+```
+
+### Default Layout
 ```
 +--------------+--------------+--------------+--------------+
 | ▲ UP 1 (0)   | ▲ UP 2 (1)   | ▲ UP 3 (2)   | ▲ UP 4 (3)   |
@@ -207,41 +206,42 @@ Sent whenever the user rebinds a key in settings:
 
 ---
 
-## 📱 Tablet Latency Optimization Guide
+## Tablet Configuration
 
-To achieve true physical minimum touch latency from your Android hardware:
-1. **Enable Touch Sensitivity (Samsung / Android):**
-   - Go to `Settings` → `Display` → Turn **Touch sensitivity** `ON`. This increases digitizer polling frequency and reduces touch debounce thresholds.
-2. **Disable Game Booster / Touch Stabilization:**
-   - If using Samsung Game Booster or Game Plugins, turn off "Accidental touch protection" and disable touch stabilization filters.
-3. **Disable Power Saving Mode:**
-   - Power saver throttles digitizer scan rates down to 60Hz. Ensure standard or high-performance refresh rate (90Hz / 120Hz) is enabled.
-
----
-
-## ❓ Troubleshooting & FAQ
-
-#### Q: Keystrokes are not registering in my game on Linux.
-- **A:** Ensure the daemon is running and ADB reverse is configured:
-  ```bash
-  adb reverse tcp:54321 tcp:54321
-  ```
-  Check the connection dot in the top-right corner of the tablet: **Green = Connected**, **Red = Disconnected**.
-
-#### Q: "Permission denied" when opening `/dev/uinput`.
-- **A:** Run `./setup.sh` to install the udev rules, or manually add your user to the `input` group and reload udev:
-  ```bash
-  sudo usermod -aG input $USER
-  ```
-  Log out and log back in for group membership to apply.
-
-#### Q: Tablet says "device unauthorized".
-- **A:** Unlock your tablet and accept the USB debugging confirmation dialog. If it doesn't show up:
-  ```bash
-  adb kill-server && adb devices
-  ```
+For lowest hardware latency:
+1. **Enable touch sensitivity:**
+   On Samsung devices, go to `Settings` > `Display` and turn on **Touch sensitivity** to raise digitizer polling frequency.
+2. **Disable touch filters:**
+   In Samsung Game Booster or Game Plugins, turn off **Accidental touch protection** and disable touch stabilization filters.
+3. **Turn off power saving:**
+   Power saving modes drop digitizer scan rates to 60 Hz. Use standard or 120 Hz refresh rates.
 
 ---
 
-## 📄 License
-This project is licensed under the [MIT License](LICENSE).
+## Troubleshooting
+
+#### Keystrokes do not register in game
+Verify the daemon is running and adb reverse is active:
+```bash
+adb reverse tcp:54321 tcp:54321
+```
+Check the status indicator in the top-right corner of the tablet: green means connected, red means disconnected.
+
+#### Permission denied on `/dev/uinput`
+Add your user to the input group and reload udev:
+```bash
+sudo usermod -aG input $USER
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+Log out and log back in to apply group changes.
+
+#### Device unauthorized in ADB
+Unlock the tablet and accept the USB debugging dialog. If the dialog does not appear:
+```bash
+adb kill-server && adb devices
+```
+
+---
+
+## License
+MIT License. See [LICENSE](LICENSE) for details.

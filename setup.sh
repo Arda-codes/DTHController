@@ -1,39 +1,28 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# ⚡ DTHController (Digital Twin : Harmonix) - Automated Setup Script
-# Works on Arch/CachyOS, Ubuntu/Debian, Fedora, openSUSE, etc.
-# ==============================================================================
+# DTHController (Digital Twin : Harmonix) automated setup script.
 
 set -e
 
-CYAN='\033[0;36m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-BOLD='\033[1m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo -e "${CYAN}${BOLD}"
-echo "╔═══════════════════════════════════════════════════════════════════╗"
-echo "║          ⚡ DTHCONTROLLER (DIGITAL TWIN : HARMONIX) ⚡           ║"
-echo "║      Ultra-Low-Latency Android Tablet Controller for Linux        ║"
-echo "╚═══════════════════════════════════════════════════════════════════╝"
-echo -e "${NC}"
+echo "=== DTHController Setup ==="
 
-# 1. Dependency Detection & Installation
-echo -e "${CYAN}[1/5] Checking host dependencies...${NC}"
-
+# 1. Dependency checks
+echo "[1/4] Checking dependencies..."
 MISSING_PKGS=()
 command -v gcc >/dev/null 2>&1 || MISSING_PKGS+=("gcc")
 command -v make >/dev/null 2>&1 || MISSING_PKGS+=("make")
 command -v adb >/dev/null 2>&1 || MISSING_PKGS+=("adb")
 
 if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
-    echo -e "${YELLOW}Missing packages detected: ${MISSING_PKGS[*]}${NC}"
-    echo -e "Attempting to install missing packages..."
+    echo -e "${YELLOW}Missing packages: ${MISSING_PKGS[*]}${NC}"
+    echo "Installing missing packages..."
     if command -v pacman >/dev/null 2>&1; then
         sudo pacman -S --needed base-devel android-tools
     elif command -v apt-get >/dev/null 2>&1; then
@@ -47,15 +36,13 @@ if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
         exit 1
     fi
 else
-    echo -e "${GREEN}✓ All required dependencies (gcc, make, adb) are installed.${NC}"
+    echo -e "${GREEN}[OK] Required build tools found.${NC}"
 fi
 
-# 2. Kernel Module & /dev/uinput Setup
-echo -e "\n${CYAN}[2/5] Configuring /dev/uinput permissions...${NC}"
-
-# Ensure uinput module loads
+# 2. Kernel module & /dev/uinput setup
+echo "[2/4] Checking /dev/uinput permissions..."
 if ! lsmod | grep -q "^uinput"; then
-    echo "Loading uinput kernel module..."
+    echo "Loading uinput module..."
     sudo modprobe uinput
 fi
 
@@ -64,83 +51,64 @@ if [ ! -f /etc/modules-load.d/uinput.conf ]; then
     echo "uinput" | sudo tee /etc/modules-load.d/uinput.conf >/dev/null
 fi
 
-# Set up udev rule
 UDEV_RULE_PATH="/etc/udev/rules.d/99-uinput.rules"
 DESIRED_RULE='KERNEL=="uinput", MODE="0660", GROUP="input", TAG+="uaccess"'
 
-NEEDS_UDEV_UPDATE=0
 if [ ! -f "$UDEV_RULE_PATH" ] || ! grep -q 'KERNEL=="uinput"' "$UDEV_RULE_PATH"; then
-    NEEDS_UDEV_UPDATE=1
-fi
-
-if [ $NEEDS_UDEV_UPDATE -eq 1 ]; then
-    echo "Installing udev rule for non-root /dev/uinput access..."
+    echo "Installing udev rule to allow non-root uinput access..."
     echo "$DESIRED_RULE" | sudo tee "$UDEV_RULE_PATH" >/dev/null
     sudo udevadm control --reload-rules
     sudo udevadm trigger
-    echo -e "${GREEN}✓ udev rules installed at $UDEV_RULE_PATH${NC}"
-else
-    echo -e "${GREEN}✓ udev rules for /dev/uinput already configured.${NC}"
 fi
 
-# Ensure user is in input group
 if ! groups "$USER" | grep -q '\binput\b'; then
-    echo "Adding $USER to 'input' group..."
+    echo "Adding $USER to input group..."
     sudo usermod -aG input "$USER"
-    echo -e "${YELLOW}Note: Added $USER to group 'input'. You may need to log out and back in for this group to take full effect.${NC}"
+    echo -e "${YELLOW}Note: Added $USER to group 'input'. You may need to log out and back in to apply this change.${NC}"
 else
-    echo -e "${GREEN}✓ User $USER is in 'input' group.${NC}"
+    echo -e "${GREEN}[OK] User $USER has input group membership.${NC}"
 fi
 
-# 3. Build Native Linux Daemon
-echo -e "\n${CYAN}[3/5] Compiling Linux companion daemon (rhythm-daemon)...${NC}"
+# 3. Build native Linux daemon
+echo "[3/4] Compiling rhythm-daemon..."
 make -C daemon clean
 make -C daemon
 
 if [ -f "daemon/rhythm-daemon" ]; then
-    echo -e "${GREEN}✓ Compiled rhythm-daemon successfully with -O3 optimization.${NC}"
+    echo -e "${GREEN}[OK] rhythm-daemon compiled.${NC}"
 else
-    echo -e "${RED}Error: Failed to compile rhythm-daemon.${NC}"
+    echo -e "${RED}[ERROR] Failed to compile rhythm-daemon.${NC}"
     exit 1
 fi
 
-# 4. Check ADB & Android Tablet
-echo -e "\n${CYAN}[4/5] Checking connected Android devices via ADB...${NC}"
+# 4. Check connected Android device
+echo "[4/4] Checking connected Android devices via ADB..."
 adb start-server >/dev/null 2>&1
-
 DEVICES=$(adb devices | grep -v "List of devices attached" | grep -v "^$" || true)
 
 if [ -z "$DEVICES" ]; then
-    echo -e "${YELLOW}⚠️  No Android device detected over USB.${NC}"
-    echo "Please ensure:"
-    echo "  1. Your tablet is connected via USB."
-    echo "  2. USB Debugging is turned ON in Developer Options."
-    echo "  3. You accepted the 'Allow USB debugging' prompt on the tablet screen."
+    echo -e "${YELLOW}[WARN] No Android device detected over USB.${NC}"
+    echo "Ensure your tablet has USB debugging enabled and is plugged in."
 else
-    echo -e "${GREEN}✓ Detected connected Android device(s):${NC}"
+    echo -e "${GREEN}[OK] Connected device found:${NC}"
     echo "$DEVICES"
     
     if [ -f "rhythm-controller.apk" ]; then
-        read -r -p "Install / Update rhythm-controller.apk on tablet now? [Y/n] " response
+        read -r -p "Install rhythm-controller.apk on tablet now? [Y/n] " response
         response=${response:-Y}
         if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
             echo "Installing rhythm-controller.apk..."
             adb install -r rhythm-controller.apk
-            echo -e "${GREEN}✓ APK installed successfully!${NC}"
+            echo -e "${GREEN}[OK] APK installed.${NC}"
         fi
     fi
 fi
 
-# 5. Create / Verify Run Script
-echo -e "\n${CYAN}[5/5] Finalizing startup launcher...${NC}"
 chmod +x start.sh 2>/dev/null || true
 
-echo -e "\n${GREEN}${BOLD}═══════════════════════════════════════════════════════════════════"
-echo -e "                 🎉 SETUP COMPLETED SUCCESSFULLY!                 "
-echo -e "═══════════════════════════════════════════════════════════════════${NC}"
-echo -e "To start playing:"
-echo -e "  1. Connect your Android tablet via USB."
-echo -e "  2. Open the ${CYAN}Rhythm Controller${NC} app on your tablet."
-echo -e "  3. Run: ${GREEN}./start.sh${NC}"
-echo -e "     (This automatically forwards port 54321 and launches the daemon)"
-echo -e "═══════════════════════════════════════════════════════════════════\n"
+echo ""
+echo "=== Setup complete ==="
+echo "To start the controller:"
+echo "  1. Connect your Android tablet via USB."
+echo "  2. Launch DTHController on the tablet."
+echo "  3. Run: ./start.sh"
