@@ -2,9 +2,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux%20(X11%20%2F%20Wayland)-orange.svg)](https://kernel.org)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-blue.svg)](https://microsoft.com/windows)
 [![Android: 8.0+](https://img.shields.io/badge/Android-8.0%2B-green.svg)](https://developer.android.com)
 
-DTHController turns an Android tablet into a low-latency Linux game controller over USB. It provides a 12-pad touch interface on Android and a native C companion daemon that exposes a `/dev/uinput` keyboard device on Linux, suitable for rhythm games such as osu!mania, Clone Hero, and Etterna.
+DTHController turns an Android tablet into a low-latency rhythm game controller over USB for Linux and Windows. It provides a 12-pad touch interface on Android and native companion daemons that inject keystrokes via `/dev/uinput` (Linux) and `SendInput` hardware scan codes (Windows), suitable for games like osu!, osu!lazer, Clone Hero, and Etterna.
 
 ---
 
@@ -42,21 +43,21 @@ DTHController turns an Android tablet into a low-latency Linux game controller o
                USB cable via adb reverse tunnel
                `adb reverse tcp:54321 tcp:54321` (< 0.5 ms RTT)
                                │
-   ┌───────────────────────────▼─────────────────────────────┐
-   │                       Linux Host                        │
-   │                                                         │
-   │   C companion daemon (SCHED_RR real-time priority)      │
-   │               │ TCP_NODELAY, TCP_QUICKACK, 2KB buffer   │
-   │               │ Desync-safe packet parser               │
-   │               ▼                                         │
-   │   Atomic write(2): [EV_KEY, SYN_REPORT]                 │
-   │               ▼                                         │
-   │   /dev/uinput virtual keyboard device                   │
-   │       ├── ID_INPUT_KEYBOARD=1 (Wayland & X11 routed)    │
-   │       └── EV_REP disabled (no autorepeat chatter)       │
-   │               ▼                                         │
-   │   Game (osu!mania, Clone Hero, Etterna, etc.)           │
-   └─────────────────────────────────────────────────────────┘
+            ┌──────────────────┴──────────────────┐
+            ▼                                     ▼
+   ┌─────────────────────────────┐       ┌─────────────────────────────┐
+   │         Linux Host          │       │        Windows Host         │
+   │                             │       │                             │
+   │ C daemon (SCHED_RR)         │       │ DTHController.exe           │
+   │       │                     │       │       │ timeBeginPeriod(1)  │
+   │       ▼ write(2)            │       │       ▼ SendInput()         │
+   │ /dev/uinput virtual device  │       │ Hardware scan code injection│
+   │ (ID_INPUT_KEYBOARD=1)       │       │ (DirectX / RawInput / SDL2) │
+   └──────────────┬──────────────┘       └──────────────┬──────────────┘
+                  │                                     │
+                  └──────────────────┬──────────────────┘
+                                     ▼
+                   Game (osu!, Clone Hero, Etterna, etc.)
 ```
 
 ---
@@ -67,8 +68,9 @@ DTHController turns an Android tablet into a low-latency Linux game controller o
   - Row 0 (Up): Chevron icons (`▲`)
   - Row 1 (Middle): Diamond icons (`◆`)
   - Row 2 (Down): Downward chevron icons (`▼`)
-- **No autorepeat spam:** The uinput device runs without `EV_REP`, preventing the kernel from repeating held keys during hold notes.
-- **Wayland and X11 support:** Registers keys 1 to 248 so systemd-udev classifies the device with `ID_INPUT_KEYBOARD=1`, routing keystrokes directly to focused windows.
+- **No autorepeat spam:** The Linux uinput device runs without `EV_REP` and Windows uses `SendInput`, preventing the OS from repeating held keys during hold notes.
+- **Cross-platform support:** Native C daemon for Linux (X11 & Wayland via `/dev/uinput`) and native daemon for Windows (`SendInput` with DirectX-compatible hardware scan codes).
+- **1 ms Windows timer precision:** Windows daemon calls `timeBeginPeriod(1)` and raises process priority to Realtime/High for jitter-free input handling.
 - **Adjustable pad scaling:** Scale pad width and height from 50% to 100%, customize pad margins (4px to 24px), and align pads to the top, center, or bottom of the screen.
 - **Key rebinding:** Rebind any pad to any keyboard or gamepad key directly from the tablet interface. Changes synchronize immediately with the daemon.
 - **Hitsound feedback:** Optional mechanical switch, soft thock, or arcade pop sound with volume control and headroom limits to prevent clipping.
@@ -86,14 +88,24 @@ DTHController turns an Android tablet into a low-latency Linux game controller o
    - `TCP_NODELAY`: Disables Nagle's algorithm after connection, eliminating 40 ms packet delays.
    - `TCP_QUICKACK`: Forces immediate TCP acknowledgments on Linux.
    - `SO_RCVBUF` and `SO_SNDBUF`: Set to minimal buffers (512 B to 2 KB) to prevent queue buffering.
-4. **Real-time Linux priority:**
-   The daemon runs with `SCHED_RR` (priority 10) to preempt background desktop processes.
+4. **Real-time OS priority:**
+   - Linux: Runs with `SCHED_RR` (priority 10) to preempt background desktop processes.
+   - Windows: Sets `REALTIME_PRIORITY_CLASS` and `THREAD_PRIORITY_TIME_CRITICAL` with `timeBeginPeriod(1)`.
 5. **Zero allocations on the hot path:**
    No objects, arrays, or iterators are allocated during touch handling or canvas drawing.
 
 ---
 
 ## Quick Start
+
+### Windows
+
+1. Connect your Android tablet to your PC via USB with **USB Debugging** enabled.
+2. Install `rhythm-controller.apk` on your tablet (via `adb install -r rhythm-controller.apk` or copy the file over).
+3. Open `DTHController` on the tablet.
+4. Double-click `start.bat` on Windows (or run `windows\DTHController.exe`).
+
+### Linux
 
 Clone the repository and run the setup script:
 
@@ -109,7 +121,7 @@ cd DTHController
 3. Compiles the Linux daemon with `-O3` optimizations.
 4. Checks for a connected Android tablet and installs `rhythm-controller.apk`.
 
-To launch the controller:
+To launch the controller on Linux:
 ```bash
 ./start.sh
 ```
@@ -234,6 +246,9 @@ sudo usermod -aG input $USER
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 Log out and log back in to apply group changes.
+
+#### Windows: Keystrokes not registering in game
+If your rhythm game is launched with administrator privileges, Windows User Interface Privilege Isolation (UIPI) will prevent unprivileged applications from injecting keystrokes into it. Right-click `start.bat` or `DTHController.exe` and select **Run as administrator**.
 
 #### Device unauthorized in ADB
 Unlock the tablet and accept the USB debugging dialog. If the dialog does not appear:

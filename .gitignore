@@ -2,6 +2,9 @@
 daemon/*.o
 daemon/rhythm-daemon
 
+# Windows build artifacts
+windows/target/
+
 # Android / Gradle artifacts
 .gradle/
 build/
@@ -13,5 +16,7 @@ local.properties
 *.iml
 .DS_Store
 
-# Keep prebuilt APK for one-click setup
+# Keep prebuilt APK and Windows executable for one-click setup
 !rhythm-controller.apk
+!DTHController.exe
+!windows/DTHController.exe
