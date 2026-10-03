@@ -10,7 +10,6 @@ DTHController turns an Android tablet into a low-latency rhythm game controller 
 ---
 
 ## Table of Contents
-- [Architecture](#architecture)
 - [Features](#features)
 - [Latency Optimizations](#latency-optimizations)
 - [Quick Start](#quick-start)
@@ -22,43 +21,6 @@ DTHController turns an Android tablet into a low-latency rhythm game controller 
 - [License](#license)
 
 ---
-
-## Architecture
-
-```
-   ┌─────────────────────────────────────────────────────────┐
-   │                  Android Tablet (USB)                   │
-   │                                                         │
-   │   Multi-touch grid (3x4 layout)                         │
-   │               │                                         │
-   │               │ requestUnbufferedDispatch()             │
-   │               ▼                                         │
-   │   Direct onTouchEvent handler                           │
-   │               │                                         │
-   │               │ Direct socket write (< 5 µs)            │
-   │               ▼                                         │
-   │   2-byte binary packet: [button_id, state]              │
-   └───────────────────────────┬─────────────────────────────┘
-                               │
-               USB cable via adb reverse tunnel
-               `adb reverse tcp:54321 tcp:54321` (< 0.5 ms RTT)
-                               │
-            ┌──────────────────┴──────────────────┐
-            ▼                                     ▼
-   ┌─────────────────────────────┐       ┌─────────────────────────────┐
-   │         Linux Host          │       │        Windows Host         │
-   │                             │       │                             │
-   │ C daemon (SCHED_RR)         │       │ DTHController.exe           │
-   │       │                     │       │       │ timeBeginPeriod(1)  │
-   │       ▼ write(2)            │       │       ▼ SendInput()         │
-   │ /dev/uinput virtual device  │       │ Hardware scan code injection│
-   │ (ID_INPUT_KEYBOARD=1)       │       │ (DirectX / RawInput / SDL2) │
-   └──────────────┬──────────────┘       └──────────────┬──────────────┘
-                  │                                     │
-                  └──────────────────┬──────────────────┘
-                                     ▼
-                   Game (osu!, Clone Hero, Etterna, etc.)
-```
 
 ---
 
